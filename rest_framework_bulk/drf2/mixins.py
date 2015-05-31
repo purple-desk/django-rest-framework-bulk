@@ -166,7 +166,7 @@ class BulkDestroyModelMixin(object):
     def post_bulk_delete(self, objs):
         pass
 
-    def destroy(self, request, *args, **kwargs):
+    def bulk_destroy(self, request, *args, **kwargs):
         #get filtered queryset:
         qs = self.filter_queryset(self.get_queryset())
 
