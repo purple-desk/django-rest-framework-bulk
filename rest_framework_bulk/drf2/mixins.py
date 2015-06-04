@@ -88,6 +88,7 @@ class BulkUpdateModelMixin(object):
     ``many=True`` ability from Django REST >= 2.2.5.
 
     Our addons:
+    - Check object permissions in pre_save method for each object.
     - pre_bulk_save(self, objs): pre save all objects.
     - post_bulk_save(self, objs): post save all objects.
     NOTE: pre_save, post_save gets each single object from the bulk.
@@ -110,6 +111,12 @@ class BulkUpdateModelMixin(object):
         # are checked in initial() which always gets executed
         # before any of the API actions (e.g. create, update, etc)
         return
+
+    def pre_save(self, obj):
+        #check permission for each object in bulk:
+        if obj.pk:
+            self.check_object_permissions(self.request, obj)
+        super(BulkUpdateModelMixin, self).pre_save(obj)
 
     def pre_bulk_update(self, objs):
         pass
@@ -149,17 +156,24 @@ class BulkUpdateModelMixin(object):
 
 class BulkDestroyModelMixin(object):
     """
-    Destroy model instances from a list.
+    Delete bulk items from a list.
     Must specify ?idList=id1,id2,... in the query-params, otherwise the
     bulk will fail (This asserts that no one deletes the whole list without
     explicitly specify which items to delete).
 
     Our changes and addons:
     - We force to delete the object through the serializer with delete_object method.
+    - Check object permissions in pre_delete method for each object.
     - pre_bulk_delete(self, objs): pre delete all objects.
     - post_bulk_delete(self, objs): post delete all objects.
     NOTE: pre_delete, post_delete gets each single object from the bulk.
     """
+
+    def pre_delete(self, obj):
+        #check permission for each object in bulk:
+        if obj.pk:
+            self.check_object_permissions(self.request, obj)
+        super(BulkDestroyModelMixin, self).pre_delete(obj)
 
     def pre_bulk_delete(self, objs):
         pass
