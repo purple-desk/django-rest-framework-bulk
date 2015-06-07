@@ -70,11 +70,29 @@ class BulkCreateModelMixin(CreateModelMixin):
                                                  partial=False)
 
             if serializer.is_valid():
+                errors = []
                 for obj in serializer.object:
-                    self.pre_save(obj)
-                self.pre_bulk_save(serializer.object)
+                    error = {}
+                    try:
+                        #check object permission for each object in bulk, and do pre action:
+                        if obj.pk:
+                            self.check_object_permissions(self.request, obj)
+                        self.pre_save(obj)
+                    except ValidationError as err:
+                        # full_clean on model instances may be called in pre_save
+                        # so we have to handle eventual errors.
+                        error = {'non_field_errors': err.message}
+                    errors.append(error)
+                if any(errors):
+                    return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+                try:
+                    self.pre_bulk_save(serializer.object)
+                except ValidationError as err:
+                    return Response(err.message, status=status.HTTP_400_BAD_REQUEST)
+
                 self.object = serializer.save(force_insert=not post_allow_update)
-                self.post_bulk_save(serializer.object)
+
+                self.post_bulk_save(self.object)
                 for obj in self.object:
                     self.post_save(obj, created=True)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -112,15 +130,9 @@ class BulkUpdateModelMixin(object):
         # before any of the API actions (e.g. create, update, etc)
         return
 
-    def pre_save(self, obj):
-        #check permission for each object in bulk:
-        if obj.pk:
-            self.check_object_permissions(self.request, obj)
-        super(BulkUpdateModelMixin, self).pre_save(obj)
-
-    def pre_bulk_update(self, objs):
+    def pre_bulk_save(self, objs):
         pass
-    def post_bulk_update(self, objs):
+    def post_bulk_save(self, objs):
         pass
 
     def bulk_update(self, request, *args, **kwargs):
@@ -133,18 +145,32 @@ class BulkUpdateModelMixin(object):
                                          partial=partial)
 
         if serializer.is_valid():
-            try:
-                for obj in serializer.object:
+            errors = []
+            for obj in serializer.object:
+                error = {}
+                try:
+                    #check object permission for each object in bulk, and do pre action:
+                    if obj.pk:
+                        self.check_object_permissions(self.request, obj)
                     self.pre_save(obj)
+                except ValidationError as err:
+                    # full_clean on model instances may be called in pre_save
+                    # so we have to handle eventual errors.
+                    error = {'non_field_errors': err.message}
+                errors.append(error)
+            if any(errors):
+                return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                self.pre_bulk_save(serializer.object)
             except ValidationError as err:
-                # full_clean on model instances may be called in pre_save
-                # so we have to handle eventual errors.
-                return Response(err.message_dict, status=status.HTTP_400_BAD_REQUEST)
-            self.pre_bulk_update(serializer.object)
+                return Response(err.message, status=status.HTTP_400_BAD_REQUEST)
+
             self.object = serializer.save(force_update=True)
-            self.post_bulk_update(serializer.object)
+
+            self.post_bulk_save(self.object)
             for obj in self.object:
                 self.post_save(obj, created=False)
+
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -168,12 +194,6 @@ class BulkDestroyModelMixin(object):
     - post_bulk_delete(self, objs): post delete all objects.
     NOTE: pre_delete, post_delete gets each single object from the bulk.
     """
-
-    def pre_delete(self, obj):
-        #check permission for each object in bulk:
-        if obj.pk:
-            self.check_object_permissions(self.request, obj)
-        super(BulkDestroyModelMixin, self).pre_delete(obj)
 
     def pre_bulk_delete(self, objs):
         pass
@@ -201,14 +221,33 @@ class BulkDestroyModelMixin(object):
 
         #delete the objects in serializer:
         if serializer.is_valid():  #Note: serializer should be valid always
+            errors = []
             for obj in serializer.object:
-                self.pre_delete(obj)
-            self.pre_bulk_delete(serializer.object)
+                error = {}
+                try:
+                    #check object permission for each object in bulk, and do pre action:
+                    if obj.pk:
+                        self.check_object_permissions(self.request, obj)
+                    self.pre_delete(obj)
+                except ValidationError as err:
+                    # full_clean on model instances may be called in pre_save
+                    # so we have to handle eventual errors.
+                    error = {'non_field_errors': err.message}
+                errors.append(error)
+            if any(errors):
+                return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                self.pre_bulk_delete(serializer.object)
+            except ValidationError as err:
+                return Response(err.message, status=status.HTTP_400_BAD_REQUEST)
+
             for obj in serializer.object:
                 serializer.delete_object(obj)
+
             self.post_bulk_delete(serializer.object)
             for obj in serializer.object:
                 self.post_delete(obj)
+
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
